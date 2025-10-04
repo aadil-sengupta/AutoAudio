@@ -87,6 +87,7 @@ def chunk_sentences(sentences: Iterable[str]) -> List[Tuple[str, int, float]]:
 	return chunks
 
 
+
 def write_csv(csv_path: Path, segments: Sequence[Tuple[str, int, float]]) -> None:
 	csv_path.parent.mkdir(parents=True, exist_ok=True)
 	with csv_path.open("w", newline="", encoding="utf-8") as csv_file:
