@@ -99,7 +99,9 @@ def main():
         raise FileNotFoundError(f"Audio directory not found: {args.audio_dir}")
     
     # Create output directory if needed
-    os.makedirs(os.path.dirname(args.output_csv), exist_ok=True)
+    output_dir = os.path.dirname(args.output_csv)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
     
     # Prepare dataset
     prepare_dataset(args.input_csv, args.audio_dir, args.output_csv, args.sample_rate, args.audio_prefix)
