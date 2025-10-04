@@ -1,0 +1,3 @@
+[console_scripts]
+epub2txt=epub2txt.__main__:main
+

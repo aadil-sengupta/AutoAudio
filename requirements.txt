@@ -1,0 +1,3 @@
+epub2txt
+python-dotenv
+requests
