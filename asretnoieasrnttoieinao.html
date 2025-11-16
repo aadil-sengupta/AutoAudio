@@ -1,0 +1,1662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AutoAudio — Natural Offline TTS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&display=swap">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --bg2: #0f0f0f;
+    --panel: rgba(20, 20, 20, 0.8);
+    --ink: #ffffff;
+    --muted: #a3a3a3;
+    --accent: #ff6b6b;
+    --accent-ink: #ffffff;
+    --btn: rgba(255, 255, 255, 0.1);
+    --btn-ink: #ffffff;
+    --border: rgba(255, 255, 255, 0.1);
+    --ring: #ff6b6b;
+    --primary: #ff6b6b;
+    --secondary: rgba(255, 255, 255, 0.05);
+    --glass: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.1);
+  }
+  
+  html, body {
+    height: 100%;
+    background: 
+      radial-gradient(1200px 800px at 20% -10%, rgba(255, 107, 107, 0.1) 0%, transparent 60%),
+      radial-gradient(800px 600px at 80% 20%, rgba(255, 190, 123, 0.08) 0%, transparent 50%),
+      linear-gradient(180deg, var(--bg), var(--bg2));
+    color: var(--ink);
+    font-family:
+    ui-sans-serif,
+    system-ui,
+    sans-serif,
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Segoe UI Symbol",
+    "Noto Color Emoji";
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    scroll-behavior: smooth;
+    overflow-x: hidden;
+  }
+  
+  * { 
+    box-sizing: border-box; 
+  }
+  
+  #app {
+    display: grid;
+    grid-template-columns: 400px 1fr;
+    grid-template-rows: 1fr;
+    height: 100vh;
+    position: relative;
+  }
+  
+  /* Noise texture overlay */
+  #app::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.3'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1;
+  }
+  
+  header {
+    position: relative; 
+    z-index: 20;
+    padding: 24px;
+    background: transparent;
+    backdrop-filter: blur(20px);
+    border-right: 1px solid var(--glass-border);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.2);
+    overflow-y: auto;
+    height: 100vh;
+  }
+  
+  .header-content {
+    max-width: none;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  
+  .header-top {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px 24px;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  }
+  
+  .header-bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+    padding: 20px 24px;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  }
+  
+  .controls-group {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    width: 100%;
+  }
+  
+  .controls-section {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    backdrop-filter: none;
+    width: 100%;
+  }
+  
+  .controls-section:first-child {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  
+  .controls-section:first-child .btn {
+    flex: 1;
+    min-width: 70px;
+  }
+  
+  input[type="file"] {
+    background: var(--glass); 
+    color: var(--ink);
+    border: 1px solid var(--glass-border); 
+    border-radius: 12px;
+    padding: 10px 14px; 
+    font-size: 14px;
+    backdrop-filter: blur(10px);
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  
+  input[type="file"]:hover {
+    border-color: var(--primary);
+    background: rgba(255, 107, 107, 0.1);
+  }
+  
+  select {
+    background: var(--glass); 
+    color: var(--ink);
+    border: 1px solid var(--glass-border); 
+    border-radius: 12px;
+    padding: 8px 12px; 
+    font-size: 14px;
+    backdrop-filter: blur(10px);
+    transition: all 0.2s ease;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  select option {
+    background: var(--bg2);
+    color: var(--ink);
+    padding: 8px 12px;
+    border: none;
+  }
+  
+  select option:hover {
+    background: rgba(255, 107, 107, 0.1);
+    color: var(--ink);
+  }
+  
+  select option:checked {
+    background: var(--primary);
+    color: var(--accent-ink);
+  }
+  
+  input[type="range"] {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    outline: none;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  
+  select:focus, input[type="range"]:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.2);
+  }
+  
+  .btn {
+    background: var(--glass); 
+    color: var(--btn-ink);
+    border: 1px solid var(--glass-border); 
+    border-radius: 10px;
+    padding: 8px 16px; 
+    font-weight: 500; 
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    position: relative;
+    overflow: hidden;
+    min-width: 80px;
+    text-align: center;
+  }
+  
+  .btn:hover { 
+    border-color: var(--primary);
+    background: rgba(255, 107, 107, 0.1);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(255, 107, 107, 0.15);
+  }
+  
+  .btn:active { 
+    transform: translateY(0px);
+  }
+  
+  .btn.primary {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+  }
+  
+  .btn.primary:hover {
+    background: #ff5252;
+    border-color: #ff5252;
+    box-shadow: 0 4px 16px rgba(255, 107, 107, 0.3);
+  }
+  
+  .btn.secondary { 
+    background: transparent; 
+    border-color: var(--glass-border);
+  }
+  
+  .btn[disabled] { 
+    opacity: 0.4; 
+    cursor: not-allowed; 
+    transform: none;
+  }
+  
+  .btn[disabled]:hover {
+    border-color: var(--glass-border);
+    background: var(--glass);
+    box-shadow: none;
+    transform: none;
+  }
+  
+  .shortcuts {
+    margin-left: auto; 
+    font-size: 12px; 
+    color: var(--muted);
+    display: flex; 
+    gap: 16px; 
+    align-items: center;
+  }
+  
+  kbd {
+    border: 1px solid var(--glass-border);
+    background: var(--glass);
+    padding: 4px 8px; 
+    border-radius: 8px; 
+    font-size: 11px;
+    color: var(--ink);
+    backdrop-filter: blur(10px);
+    font-weight: 500;
+  }
+  
+  #page {
+    padding: 24px clamp(24px, 6vw, 60px) 60px;
+    line-height: 1.7;
+    overflow: auto;
+    position: relative;
+    z-index: 2;
+    height: 100vh;
+  }
+  
+  .doc {
+    max-width: 800px; 
+    margin: 0 auto;
+    font-size: clamp(16px, 1.1vw + 14px, 20px);
+    font-weight: 400;
+  }
+  
+  .doc p {
+    margin: 0 0 20px 0;
+    text-align: left;
+    background: var(--glass);
+    padding: 24px 28px;
+    border-radius: 16px;
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    transition: all 0.2s ease;
+    line-height: 1.7;
+  }
+  
+  .doc p:hover {
+    border-color: rgba(255, 107, 107, 0.2);
+    background: rgba(255, 107, 107, 0.03);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  }
+  
+  .sentence {
+    transition: all 0.2s ease;
+    border-radius: 8px;
+    cursor: pointer;
+    padding: 0.1em 0.2em;
+    position: relative;
+  }
+  
+  .sentence:hover { 
+    background: rgba(255, 107, 107, 0.1);
+    transform: translateY(-1px);
+  }
+  
+  .sentence.active {
+    background: linear-gradient(135deg, var(--primary), #ff8e8e);
+    color: var(--accent-ink);
+    box-shadow: 0 4px 20px rgba(255, 107, 107, 0.4);
+    transform: translateY(-2px);
+  }
+  
+  .meta {
+    color: var(--muted); 
+    font-size: 12px;
+    display: flex; 
+    align-items: center; 
+    gap: 12px; 
+    flex-wrap: wrap;
+  }
+  
+  .meters { 
+    display: flex; 
+    gap: 20px; 
+    align-items: stretch; 
+    flex-wrap: wrap; 
+  }
+  
+  .meters > div { 
+    display: flex; 
+    flex-direction: column;
+    align-items: stretch; 
+    gap: 8px; 
+    flex: 1;
+    min-width: 120px;
+  }
+  
+  .meters > div label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  
+  .meters > div .hint {
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 4px;
+  }
+  
+  .footer-note { 
+    margin-top: 8px; 
+    font-size: 12px; 
+    color: var(--muted);
+    font-weight: 400;
+  }
+  
+  .title { 
+    font-weight: 700; 
+    letter-spacing: 0.5px; 
+    color: var(--ink); 
+    margin-right: 12px;
+    font-size: 18px;
+  }
+  
+  .title.font-instrument-serif {
+    font-family: "Instrument Serif", ui-sans-serif, system-ui, sans-serif;
+    font-size: 1.5rem;
+    font-weight: 300;
+    letter-spacing: 0;
+  }
+  
+  .file-name { 
+    color: var(--muted);
+    font-weight: 500;
+  }
+  
+  .status-dot { 
+    width: 10px; 
+    height: 10px; 
+    border-radius: 50%; 
+    background: #616b81; 
+    display: inline-block;
+    box-shadow: 0 0 10px currentColor;
+  }
+  
+  .status-dot.playing { 
+    background: #4ade80;
+    box-shadow: 0 0 15px rgba(74, 222, 128, 0.5);
+  }
+  
+  .status-dot.paused { 
+    background: #fbbf24;
+    box-shadow: 0 0 15px rgba(251, 191, 36, 0.5);
+  }
+  
+  .status-dot.stopped { 
+    background: #ef4444;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+  }
+  
+  .hint { 
+    color: var(--muted); 
+    font-size: 12px;
+    font-weight: 500;
+  }
+  
+  .title-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  .title-link {
+    text-decoration: none;
+    color: inherit;
+    transition: opacity 0.2s ease;
+  }
+  
+  .title-link:hover {
+    opacity: 0.8;
+  }
+  
+  .status-section {
+    display: flex;
+    align-items: center;
+  }
+  
+  .file-input-section {
+    margin-top: 24px;
+    padding-top: 0;
+    border-top: none;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 20px 24px;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+  }
+  
+  .shortcuts-section {
+    margin-top: 16px;
+    padding: 16px 24px;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  }
+  
+  .toggle { 
+    display: flex; 
+    align-items: center; 
+    gap: 8px; 
+    font-size: 12px; 
+    color: var(--muted);
+    font-weight: 500;
+  }
+  
+  .toggle input { 
+    accent-color: var(--primary);
+    transform: scale(1.1);
+  }
+  
+  :focus-visible { 
+    outline: 2px solid var(--primary); 
+    outline-offset: 2px; 
+    border-radius: 8px; 
+  }
+  
+  /* Hide scrollbars but keep functionality */
+  header {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* Internet Explorer 10+ */
+  }
+  
+  header::-webkit-scrollbar {
+    display: none; /* WebKit */
+  }
+  
+  main {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* Internet Explorer 10+ */
+  }
+  
+  main::-webkit-scrollbar {
+    display: none; /* WebKit */
+  }
+  
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--primary);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+    transition: all 0.2s ease;
+    margin-top: -5px; /* Center the thumb on the track */
+  }
+  
+  input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(255, 107, 107, 0.5);
+  }
+  
+  input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: var(--primary);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+  }
+  
+  /* Firefox track styling */
+  input[type="range"]::-moz-range-track {
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+  }
+  
+  /* Webkit track styling */
+  input[type="range"]::-webkit-slider-track {
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+  }
+  
+  /* Responsive design */
+  @media (max-width: 1024px) {
+    #app {
+      grid-template-columns: 350px 1fr;
+    }
+    
+    header {
+      padding: 20px;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    #app {
+      grid-template-columns: 300px 1fr;
+    }
+    
+    header {
+      padding: 16px;
+    }
+    
+    .header-content {
+      gap: 16px;
+    }
+    
+    .file-input-section {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 20px;
+      margin-top: 16px;
+    }
+    
+    #page {
+      height: auto;
+      padding: 20px 16px 60px;
+    }
+    
+    .doc {
+      font-size: 16px;
+    }
+    
+    .doc p {
+      padding: 20px 24px;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .controls-group {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+    }
+    
+    .controls-section:first-child {
+      flex-direction: row;
+      flex-wrap: wrap;
+    }
+    
+    .btn {
+      padding: 8px 12px;
+      font-size: 12px;
+      min-width: 70px;
+    }
+    
+    .meters {
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .meters > div {
+      justify-content: center;
+    }
+    
+    .header-top,
+    .header-bottom,
+    .file-input-section {
+      padding: 12px 16px;
+    }
+  }
+  
+  /* Animation for loading states */
+  @keyframes shimmer {
+    0% { background-position: -200px 0; }
+    100% { background-position: calc(200px + 100%) 0; }
+  }
+  
+  .font-instrument-serif {
+    font-family: "Instrument Serif", ui-sans-serif, system-ui, sans-serif;
+  }
+  
+  .text-xl {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+  }
+  
+  .text-2xl {
+    font-size: 1.5rem;
+    line-height: 2rem;
+  }
+  
+  .text-3xl {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+  }
+  
+  .font-light {
+    font-weight: 300;
+  }
+  
+  .mb-2 {
+    margin-bottom: 0.5rem;
+  }
+  
+  .mb-4 {
+    margin-bottom: 1rem;
+  }
+  
+  /* Spotify-style Bottom Player Bar */
+  .player-bar {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    backdrop-filter: blur(20px);
+    padding: 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 400px;
+    max-width: calc(100vw - 48px);
+    z-index: 30;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+  
+  /* Adjust positioning to align with main content */
+  @media (min-width: 1025px) {
+    .player-bar {
+      left: calc(50% + 200px); /* Center of main content area (sidebar width is 400px) */
+      transform: translateX(-50%);
+    }
+  }
+  
+  .player-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+  }
+  
+  .track-info {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .track-title {
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+  }
+  
+  .track-subtitle {
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .center-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  
+  .control-btn {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .control-btn:hover:not(:disabled) {
+    color: var(--ink);
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(1.05);
+  }
+  
+  .control-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  
+  .play-pause-btn {
+    background: var(--ink);
+    border: none;
+    color: var(--bg);
+    cursor: pointer;
+    padding: 12px;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  }
+  
+  .play-pause-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  }
+  
+  .play-pause-btn:active {
+    transform: scale(0.95);
+  }
+  
+  .right-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+    justify-content: flex-end;
+  }
+  
+  .volume-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 120px;
+  }
+  
+  .volume-slider {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  
+  .volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: var(--ink);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
+  }
+  
+  .volume-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+  
+  .volume-slider::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: var(--ink);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  }
+  
+  .progress-container {
+    position: relative;
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    cursor: pointer;
+  }
+  
+  .progress-bar {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+  
+  .progress-fill {
+    height: 100%;
+    background: var(--ink);
+    border-radius: 2px;
+    transition: width 0.1s ease;
+    width: 0%;
+  }
+  
+  .progress-handle {
+    position: absolute;
+    top: 50%;
+    left: 0%;
+    width: 12px;
+    height: 12px;
+    background: var(--ink);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+  
+  .progress-container:hover .progress-handle {
+    opacity: 1;
+  }
+  
+  .progress-container:hover .progress-fill {
+    background: var(--primary);
+  }
+  
+  /* Responsive adjustments for player bar */
+  @media (max-width: 1024px) {
+    .player-bar {
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 16px;
+      bottom: 16px;
+      width: 350px;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .player-bar {
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 16px;
+      bottom: 16px;
+      width: 350px;
+    }
+    
+    .player-content {
+      gap: 16px;
+    }
+    
+    .center-controls {
+      gap: 12px;
+    }
+    
+    .play-pause-btn {
+      width: 44px;
+      height: 44px;
+    }
+    
+    .volume-control {
+      min-width: 100px;
+    }
+    
+    .track-title {
+      font-size: 13px;
+    }
+    
+    .track-subtitle {
+      font-size: 11px;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .player-bar {
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 12px;
+      width: calc(100vw - 24px);
+      max-width: none;
+    }
+    
+    .player-content {
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .right-controls {
+      justify-content: center;
+      width: 100%;
+    }
+    
+    .volume-control {
+      min-width: 150px;
+    }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="hdr">
+    <div class="header-content">
+      <div class="header-top">
+        <div class="title-section">
+          <a href="index.html" class="title-link">
+            <span class="title font-instrument-serif">🎙️ AutoAudio</span>
+          </a>
+          <span id="filename" class="file-name"></span>
+        </div>
+        <div class="status-section">
+          <span class="meta">
+            <span id="stateDot" class="status-dot stopped" aria-hidden="true"></span>
+            <span id="stateLabel">Stopped</span>
+          </span>
+        </div>
+      </div>
+      
+      <div class="header-bottom">
+        <div class="controls-group">
+          
+          <div class="controls-section">
+            <label for="voice" class="font-instrument-serif text-lg font-light">Voice</label>
+            <select id="voice"></select>
+          </div>
+          
+          <div class="controls-section">
+            <div class="meters">
+              <div>
+                <label for="rate" class="font-instrument-serif font-light">Rate</label>
+                <input id="rate" type="range" min="0.5" max="2" step="0.05">
+                <span id="rateVal" class="hint"></span>
+              </div>
+              <div>
+                <label for="pitch" class="font-instrument-serif font-light">Pitch</label>
+                <input id="pitch" type="range" min="0" max="2" step="0.05">
+                <span id="pitchVal" class="hint"></span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="controls-section">
+            <div class="toggle">
+              <input id="autoscroll" type="checkbox" checked />
+              <label for="autoscroll" class="font-instrument-serif font-light">Auto-scroll</label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="file-input-section">
+      <input id="file" type="file" accept=".txt,text/plain" />
+      <div class="footer-note">All processing is local & offline. Click any sentence to start from there.</div>
+    </div>
+    
+    <div class="shortcuts-section">
+      <div class="shortcuts">
+        <span>Shortcuts:</span>
+        <span><kbd>Space</kbd> Play/Pause</span>
+        <span><kbd>Esc</kbd> Stop</span>
+      </div>
+    </div>
+  </header>
+
+  <main id="page">
+    <article id="doc" class="doc" aria-live="polite" aria-atomic="false"></article>
+  </main>
+</div>
+
+<!-- Spotify-style Bottom Player Bar (Overlay) -->
+<div id="player-bar" class="player-bar">
+  <div class="player-content">
+    <!-- Track Info -->
+    <div class="track-info">
+      <div class="track-title" id="trackTitle">AutoAudio — Natural Offline TTS</div>
+      <div class="track-subtitle" id="trackSubtitle">Ready to read</div>
+    </div>
+    
+    <!-- Center Controls -->
+    <div class="center-controls">
+      <button id="prevBtn" class="control-btn" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+        </svg>
+      </button>
+      <button id="playPauseBtn" class="play-pause-btn">
+        <svg id="playIcon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display: block;">
+          <path d="M8 5v14l11-7z"/>
+        </svg>
+        <svg id="pauseIcon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+          <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+        </svg>
+      </button>
+      <button id="nextBtn" class="control-btn" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+        </svg>
+      </button>
+    </div>
+    
+    <!-- Right Controls -->
+    <div class="right-controls">
+      <div class="volume-control">
+        <button id="muteBtn" class="control-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+          </svg>
+        </button>
+        <input id="volumeSlider" type="range" min="0" max="1" step="0.01" class="volume-slider">
+      </div>
+    </div>
+  </div>
+  
+  <!-- Progress Bar -->
+  <div class="progress-container">
+    <div class="progress-bar" id="progressBar">
+      <div class="progress-fill" id="progressFill"></div>
+      <div class="progress-handle" id="progressHandle"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = sel => document.querySelector(sel);
+  const $$ = sel => Array.from(document.querySelectorAll(sel));
+
+  const el = {
+    hdr: $('#hdr'),
+    file: $('#file'),
+    filename: $('#filename'),
+    doc: $('#doc'),
+    playPause: $('#playPauseBtn'),
+    prev: $('#prevBtn'),
+    next: $('#nextBtn'),
+    mute: $('#muteBtn'),
+    voice: $('#voice'),
+    rate: $('#rate'),
+    pitch: $('#pitch'),
+    volumeSlider: $('#volumeSlider'),
+    rateVal: $('#rateVal'),
+    pitchVal: $('#pitchVal'),
+    stateDot: $('#stateDot'),
+    stateLabel: $('#stateLabel'),
+    page: $('#page'),
+    autoscroll: $('#autoscroll'),
+    trackTitle: $('#trackTitle'),
+    trackSubtitle: $('#trackSubtitle'),
+    progressBar: $('#progressBar'),
+    progressFill: $('#progressFill'),
+    progressHandle: $('#progressHandle'),
+    playIcon: $('#playIcon'),
+    pauseIcon: $('#pauseIcon')
+  };
+
+  const S = {
+    sentences: [],
+    idx: 0,
+    playing: false,
+    paused: false,
+    voices: [],
+    currentVoiceURI: null,
+    token: 0, // play session token to ignore stale events
+    conf: {
+      rate: parseFloat(localStorage.getItem('tts.rate')) || 1.0,
+      pitch: parseFloat(localStorage.getItem('tts.pitch')) || 1.0,
+      volume: parseFloat(localStorage.getItem('tts.volume')) || 1.0,
+      voiceURI: localStorage.getItem('tts.voiceURI') || null,
+      autoscroll: localStorage.getItem('tts.autoscroll') !== 'false'
+    },
+    fileName: '',
+    keepCenterTimer: null
+  };
+
+  // ---------- UI helpers ----------
+  function setState(state) {
+    el.stateDot.classList.remove('playing','paused','stopped');
+    el.stateDot.classList.add(state);
+    el.stateLabel.textContent = state[0].toUpperCase() + state.slice(1);
+  }
+
+  function updateControls() {
+    // Update play/pause button state and icon
+    if (S.playing && !S.paused) {
+      el.playIcon.style.display = 'none';
+      el.pauseIcon.style.display = 'block';
+    } else {
+      el.playIcon.style.display = 'block';
+      el.pauseIcon.style.display = 'none';
+    }
+    
+    // Update prev/next buttons (disabled for now as they don't have functionality)
+    el.prev.disabled = true;
+    el.next.disabled = true;
+  }
+  
+  function updateTrackInfo() {
+    if (S.fileName) {
+      el.trackTitle.textContent = S.fileName;
+      el.trackSubtitle.textContent = `Sentence ${S.idx + 1} of ${S.sentences.length}`;
+    } else {
+      el.trackTitle.textContent = 'AutoAudio — Natural Offline TTS';
+      el.trackSubtitle.textContent = S.playing ? (S.paused ? 'Paused' : 'Playing') : 'Ready to read';
+    }
+  }
+  
+  function updateProgress() {
+    if (S.sentences.length === 0) return;
+    const progress = (S.idx / S.sentences.length) * 100;
+    el.progressFill.style.width = `${progress}%`;
+    el.progressHandle.style.left = `${progress}%`;
+  }
+
+  function visibleViewport() {
+    const headerH = el.hdr.offsetHeight || 0;
+    const top = window.scrollY + headerH;
+    const height = window.innerHeight - headerH;
+    return { top, height, headerH };
+  }
+
+  function centerOn(node, smooth=true) {
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
+    const { height: vpH } = visibleViewport();
+    const nodeCenter = window.scrollY + rect.top + rect.height/2;
+    const target = nodeCenter - (vpH / 2);
+    window.scrollTo({ top: Math.max(target, 0), behavior: smooth ? 'smooth' : 'auto' });
+  }
+
+  function clearActive() {
+    $$('.sentence.active').forEach(n => n.classList.remove('active'));
+  }
+
+  function markActive(idx, scroll=true) {
+    clearActive();
+    const s = S.sentences[idx];
+    if (!s) return;
+    s.node.classList.add('active');
+    if (scroll && S.conf.autoscroll) centerOn(s.node, true);
+  }
+
+  function htmlEscape(s) {
+    return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  }
+
+  // ---------- Text parsing ----------
+  function parseTXTToParagraphs(raw) {
+    let t = raw.replace(/\r\n?/g, '\n').replace(/\f/g, '\n\n');
+    t = t.replace(/^\uFEFF/, '');
+    t = t.replace(/-\n(?=\p{L})/gu, '');
+    const parts = t.split(/\n{2,}/g).map(block => {
+      let b = block.trim();
+      b = b.replace(/[^\S\r\n]*\n[^\S\r\n]*/g, ' ');
+      b = b.replace(/[ \t]{2,}/g, ' ');
+      return b;
+    }).filter(Boolean);
+    return parts;
+  }
+
+  function splitToSentences(paragraph) {
+    const abbrev = /\b(Mr|Mrs|Ms|Dr|Prof|Sr|Jr|vs|etc|e\.g|i\.e|al|Fig|No)\./gi;
+    let tmp = paragraph.replace(abbrev, m => m.replace(/\./g, '∯'));
+    const pieces = tmp.split(/(?<=[\.!?…]|[。！？])\s+(?=(?:[""'\)\]\u3001\s]*)(?:\p{Lu}|\p{N}|["'（(【［「『]|[\u4e00-\u9fff]))/gu);
+    const sentences = [];
+    for (let p of pieces) {
+      p = p.replace(/∯/g, '.').trim();
+      if (!p) continue;
+      sentences.push(p);
+    }
+    return sentences;
+  }
+
+  function renderDocument(text) {
+    el.doc.innerHTML = '';
+    S.sentences = [];
+    S.idx = 0;
+
+    const paras = parseTXTToParagraphs(text);
+    if (paras.length === 0) {
+      el.doc.innerHTML = `<p class="hint">No text detected.</p>`;
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    let idxCounter = 0;
+
+    for (const para of paras) {
+      const p = document.createElement('p');
+      const sents = splitToSentences(para);
+      if (sents.length === 0) continue;
+
+      sents.forEach((s, i) => {
+        const span = document.createElement('span');
+        span.className = 'sentence';
+        span.dataset.idx = idxCounter;
+        span.innerHTML = htmlEscape(s);
+        span.addEventListener('click', () => {
+          const go = parseInt(span.dataset.idx,10);
+          // Do not pre-highlight; speech onstart will mark the active line
+          jumpTo(go);
+        });
+        p.appendChild(span);
+        if (i !== sents.length - 1) p.appendChild(document.createTextNode(' '));
+
+        S.sentences.push({ text: s, node: span, idx: idxCounter });
+        idxCounter++;
+      });
+
+      frag.appendChild(p);
+    }
+
+    el.doc.appendChild(frag);
+    window.scrollTo({top:0, behavior: 'auto'});
+  }
+
+  // ---------- Continuous centering (Auto-scroll) ----------
+  function startKeepCentered() {
+    stopKeepCentered();
+    if (!S.conf.autoscroll) return;
+    S.keepCenterTimer = setInterval(() => {
+      const active = $$('.sentence.active')[0];
+      if (!active) return;
+      const rect = active.getBoundingClientRect();
+      const { height: vpH, headerH } = visibleViewport();
+      const viewportCenter = headerH + vpH/2;
+      const nodeCenter = rect.top + rect.height/2;
+      const drift = nodeCenter - viewportCenter;
+      const threshold = 80;
+      if (Math.abs(drift) > threshold) {
+        centerOn(active, true);
+      }
+    }, 280);
+  }
+  function stopKeepCentered() {
+    if (S.keepCenterTimer) clearInterval(S.keepCenterTimer);
+    S.keepCenterTimer = null;
+  }
+
+  // ---------- Speech ----------
+  function loadVoices() {
+    const list = speechSynthesis.getVoices();
+    if (list.length) {
+      S.voices = list.sort((a,b) => (a.lang||'').localeCompare(b.lang||'') || (a.name||'').localeCompare(b.name||''));
+      populateVoiceSelect();
+    }
+  }
+
+  function populateVoiceSelect() {
+    const sel = el.voice;
+    sel.innerHTML = '';
+    let preferred = S.conf.voiceURI;
+    const makeOption = (v) => {
+      const opt = document.createElement('option');
+      opt.value = v.voiceURI;
+      opt.textContent = `${v.name} — ${v.lang}${v.default ? ' (default)' : ''}${v.localService ? ' (local)' : ''}`;
+      if (preferred && v.voiceURI === preferred) opt.selected = true;
+      sel.appendChild(opt);
+    };
+
+    const favored = S.voices.filter(v => /google|microsoft/i.test(v.name || ''));
+    const others = S.voices.filter(v => !/google|microsoft/i.test(v.name || ''));
+    [...favored, ...others].forEach(makeOption);
+
+    if (!sel.value && S.voices[0]) sel.value = (S.voices.find(v => v.default) || S.voices[0]).voiceURI;
+    S.currentVoiceURI = sel.value || null;
+  }
+
+  function getSelectedVoice() {
+    const uri = el.voice.value;
+    return S.voices.find(v => v.voiceURI === uri) || null;
+  }
+
+  function speakFrom(idx) {
+    if (S.sentences.length === 0 || idx < 0 || idx >= S.sentences.length) return;
+
+    S.idx = idx;
+    S.playing = true; S.paused = false;
+    updateControls(); 
+    updateTrackInfo();
+    updateProgress();
+    setState('playing');
+
+    // Increment token to invalidate any pending onend from an earlier utterance
+    S.token++;
+    speechSynthesis.cancel();
+    // Small timeout lets engines settle after cancel() to prevent spurious onend
+    setTimeout(() => {
+      startKeepCentered();
+      queueNext(S.token);
+    }, 0);
+  }
+
+  function queueNext(token) {
+    if (!S.playing || S.idx >= S.sentences.length) {
+      stopSpeech();
+      return;
+    }
+    const { text } = S.sentences[S.idx];
+    const utt = new SpeechSynthesisUtterance(text);
+    const voice = getSelectedVoice();
+    if (voice) utt.voice = voice;
+    utt.rate = S.conf.rate;
+    utt.pitch = S.conf.pitch;
+    utt.volume = S.conf.volume;
+
+    utt.onstart = () => {
+      // Ignore if stale
+      if (token !== S.token || !S.playing) return;
+      markActive(S.idx, true);
+      updateTrackInfo();
+      updateProgress();
+    };
+    utt.onend = () => {
+      if (token !== S.token || !S.playing) return; // stale or stopped
+      S.idx++;
+      updateTrackInfo();
+      updateProgress();
+      if (!S.paused) queueNext(token);
+    };
+    utt.onerror = () => {
+      if (token !== S.token || !S.playing) return;
+      S.idx++;
+      updateTrackInfo();
+      updateProgress();
+      if (!S.paused) queueNext(token);
+    };
+    speechSynthesis.speak(utt);
+  }
+
+  function pauseSpeech() {
+    if (!S.playing || S.paused) return;
+    speechSynthesis.pause();
+    S.paused = true;
+    updateControls(); 
+    updateTrackInfo();
+    setState('paused');
+  }
+
+  function resumeSpeech() {
+    if (!S.playing || !S.paused) return;
+    speechSynthesis.resume();
+    S.paused = false;
+    updateControls(); 
+    updateTrackInfo();
+    setState('playing');
+  }
+
+  function stopSpeech() {
+    S.playing = false; S.paused = false;
+    S.token++; // invalidate handlers
+    speechSynthesis.cancel();
+    updateControls(); 
+    updateTrackInfo();
+    updateProgress();
+    setState('stopped');
+    clearActive();
+    stopKeepCentered();
+  }
+
+  function jumpTo(idx) { speakFrom(idx); }
+
+  // ---------- Events ----------
+  el.file.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    S.fileName = file.name || '';
+    el.filename.textContent = S.fileName ? `• ${S.fileName}` : '';
+    const text = await file.text();
+    renderDocument(text);
+    stopSpeech();
+    updateTrackInfo();
+  });
+
+  // Spotify-style play/pause button
+  el.playPause.addEventListener('click', () => {
+    if (S.sentences.length === 0) return;
+    if (S.playing && S.paused) {
+      resumeSpeech();
+    } else if (S.playing && !S.paused) {
+      pauseSpeech();
+    } else {
+      const startIdx = $$('.sentence.active')[0]?.dataset?.idx;
+      speakFrom(startIdx ? parseInt(startIdx,10) : S.idx || 0);
+    }
+  });
+
+  // Progress bar click to jump to position
+  el.progressBar.addEventListener('click', (e) => {
+    if (S.sentences.length === 0) return;
+    const rect = el.progressBar.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const percentage = clickX / rect.width;
+    const targetIdx = Math.floor(percentage * S.sentences.length);
+    speakFrom(Math.max(0, Math.min(targetIdx, S.sentences.length - 1)));
+  });
+
+  el.voice.addEventListener('change', () => {
+    S.currentVoiceURI = el.voice.value || null;
+    S.conf.voiceURI = S.currentVoiceURI;
+    localStorage.setItem('tts.voiceURI', S.conf.voiceURI || '');
+    if (S.playing && !S.paused) speakFrom(S.idx);
+  });
+
+  function bindMeter(input, label, key, fmt=(v)=>v) {
+    const update = () => {
+      S.conf[key] = parseFloat(input.value);
+      label.textContent = fmt(S.conf[key]);
+      localStorage.setItem(`tts.${key}`, String(S.conf[key]));
+      if (S.playing && !S.paused) speakFrom(S.idx);
+    };
+    input.addEventListener('input', update);
+    update();
+  }
+
+  // Sliders
+  el.rate.value = S.conf.rate;
+  el.pitch.value = S.conf.pitch;
+  el.volumeSlider.value = S.conf.volume;
+  bindMeter(el.rate, el.rateVal, 'rate', v => v.toFixed(2));
+  bindMeter(el.pitch, el.pitchVal, 'pitch', v => v.toFixed(2));
+  
+  // Player bar volume slider
+  el.volumeSlider.addEventListener('input', () => {
+    S.conf.volume = parseFloat(el.volumeSlider.value);
+    localStorage.setItem('tts.volume', String(S.conf.volume));
+    if (S.playing && !S.paused) speakFrom(S.idx);
+  });
+
+  // Auto-scroll toggle
+  el.autoscroll.checked = S.conf.autoscroll;
+  el.autoscroll.addEventListener('change', () => {
+    S.conf.autoscroll = !!el.autoscroll.checked;
+    localStorage.setItem('tts.autoscroll', String(S.conf.autoscroll));
+    if (S.conf.autoscroll) {
+      const active = $$('.sentence.active')[0];
+      if (active) centerOn(active, true);
+      startKeepCentered();
+    } else {
+      stopKeepCentered();
+    }
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (ev) => {
+    const tag = (ev.target.tagName || '').toLowerCase();
+    const isTyping = tag === 'input' || tag === 'textarea' || ev.target.isContentEditable;
+    if (isTyping) return;
+    if (ev.code === 'Space') {
+      ev.preventDefault();
+      // Use the same logic as the play/pause button
+      if (S.playing && S.paused) {
+        resumeSpeech();
+      } else if (S.playing && !S.paused) {
+        pauseSpeech();
+      } else if (S.sentences.length) {
+        speakFrom(S.idx || 0);
+      }
+    } else if (ev.key === 'Escape') {
+      stopSpeech();
+    }
+  });
+
+  // Voice initialization
+  if ('speechSynthesis' in window) {
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  } else {
+    el.stateLabel.textContent = 'TTS unsupported in this browser';
+  }
+
+  // Demo text
+  const demo = `Welcome to AutoAudio — your offline text-to-speech companion.
+Experience natural, non-robotic voices with beautiful sentence-level highlighting and intuitive click-to-jump playback.
+
+• Drop a .txt file at the top to get started.
+• Choose from various natural-sounding voices.
+• Adjust rate, pitch, and volume to your preference.
+• Click any sentence to start reading from there.
+• Space toggles Play/Pause, Esc stops.
+• Auto-scroll keeps the active sentence perfectly centered.
+
+Enjoy your reading with beautifully natural voices!`;
+  renderDocument(demo);
+
+  window.__reader = { state: S };
+  updateControls(); 
+  updateTrackInfo();
+  updateProgress();
+  setState('stopped');
+  
+  // Dynamic scrolling alternatives
+  let isScrolling = false;
+  let scrollDirection = 0;
+  
+  // Smooth scrolling with momentum
+  function smoothScroll(element, deltaY) {
+    if (isScrolling) return;
+    
+    isScrolling = true;
+    const scrollAmount = deltaY * 0.8; // Reduce scroll intensity
+    const currentScroll = element.scrollTop;
+    const targetScroll = currentScroll + scrollAmount;
+    
+    // Smooth animation
+    let startTime = null;
+    function animateScroll(timestamp) {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / 300, 1); // 300ms duration
+      const easeOut = 1 - Math.pow(1 - progress, 3); // Cubic ease-out
+      element.scrollTop = currentScroll + (targetScroll - currentScroll) * easeOut;
+      
+      if (progress < 1) {
+        requestAnimationFrame(animateScroll);
+      } else {
+        isScrolling = false;
+      }
+    }
+    
+    requestAnimationFrame(animateScroll);
+  }
+  
+  // Enhanced mouse wheel scrolling
+  document.addEventListener('wheel', (e) => {
+    const target = e.target.closest('header') || e.target.closest('main');
+    if (target && target.scrollHeight > target.clientHeight) {
+      e.preventDefault();
+      smoothScroll(target, -e.deltaY);
+    }
+  }, { passive: false });
+  
+  // Touch/swipe scrolling for mobile
+  let touchStartY = 0;
+  let touchStartTime = 0;
+  
+  document.addEventListener('touchstart', (e) => {
+    const target = e.target.closest('header') || e.target.closest('main');
+    if (target && target.scrollHeight > target.clientHeight) {
+      touchStartY = e.touches[0].clientY;
+      touchStartTime = Date.now();
+    }
+  });
+  
+  document.addEventListener('touchmove', (e) => {
+    const target = e.target.closest('header') || e.target.closest('main');
+    if (target && target.scrollHeight > target.clientHeight) {
+      e.preventDefault();
+      const touchEndY = e.touches[0].clientY;
+      const deltaY = touchStartY - touchEndY;
+      const deltaTime = Date.now() - touchStartTime;
+      
+      // Add momentum based on swipe speed
+      const momentum = deltaTime < 200 ? deltaY * 2 : deltaY * 0.5;
+      smoothScroll(target, momentum);
+    }
+  }, { passive: false });
+  
+  // Keyboard navigation
+  document.addEventListener('keydown', (e) => {
+    const isFocusOnInput = ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName);
+    if (isFocusOnInput) return;
+    
+    const scrollKeys = { 'ArrowUp': -50, 'ArrowDown': 50, 'PageUp': -200, 'PageDown': 200 };
+    if (scrollKeys[e.key]) {
+      e.preventDefault();
+      const target = document.querySelector('main') || document.querySelector('header');
+      if (target && target.scrollHeight > target.clientHeight) {
+        smoothScroll(target, scrollKeys[e.key]);
+      }
+    }
+  });
+  
+})();
+</script>
+</body>
+</html>
